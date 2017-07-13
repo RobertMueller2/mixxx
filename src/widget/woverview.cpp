@@ -541,14 +541,80 @@ void WOverview::paintEvent(QPaintEvent * /*unused*/) {
             painter.drawLine(m_iPos, breadth() - 3, m_iPos + 2, breadth() - 1);
             painter.drawLine(m_iPos - 2, breadth() - 1, m_iPos + 2, breadth() - 1);
 
-            // draw dragged caret
+            BeatsPointer beats;
+            QColor draggedCaretColor = m_bDrag ? QColor(255,255,0) : QColor(255,255,255);
+            // draw dragged or mouseover caret
             if (m_iMousePosition > -1) {
-
                 //FIXME: Color choice
-                QColor draggedCaretColor = m_bDrag ? QColor(255,255,0) : QColor(255,255,255);
-
                 paintCaret(m_iMousePosition, draggedCaretColor, &painter);
+                beats =  m_pCurrentTrack->getBeats();
+            }
 
+            if (beats) {
+                double samples = m_pCurrentTrack->getSampleRate() * m_pCurrentTrack->getDuration() * 2;
+                double s1,s2;
+                short sgn = 1;
+                if (m_iMousePosition > m_iPos) {
+                    s1 = (m_iPos + m_b) * samples / m_a;
+                    s2 = (m_iMousePosition + m_b) * samples / m_a;
+                }
+                else {
+                    s1 = (m_iMousePosition + m_b) * samples / m_a;
+                    s2 = (m_iPos + m_b) * samples / m_a;
+                    sgn = -1;
+                }
+
+                std::unique_ptr<BeatIterator> it(beats->findBeats(s1,s2));
+                int beatDiff = 0;
+                while (it->hasNext()) {
+                    it->next();
+                    beatDiff++;
+                }
+
+                QString beatCount = QString().sprintf("%d/%d", beatDiff*sgn, ((int)beatDiff*sgn/4));
+                /* FIXME START */
+
+                QFont fgFont = painter.font();
+                fgFont.setPixelSize(10 * m_scaleFactor);
+
+                QFont bgFont = painter.font();
+                bgFont.setWeight(99);
+                bgFont.setPixelSize(10 * m_scaleFactor);
+
+                painter.setOpacity(0.9);
+
+                QFontMetricsF metric(fgFont);
+                QRectF fgTextRect = metric.tightBoundingRect(beatCount);
+                QPointF beatsTextPoint;
+                qreal x,y;
+                if (m_orientation == Qt::Horizontal) {
+                    x = m_iMousePosition - fgTextRect.width();
+                    y = fgTextRect.height() + 0.5f;
+                    if (x < 0) {
+                        x = m_iMousePosition + 0.5f;
+                    }
+                }
+                else {
+                    //FIXME: untested
+                    x = 1.0f;
+                    y = m_iMousePosition -1.0f;
+                    if (y < fgTextRect.height()) {
+                        y += fgTextRect.height() + 2.0f;
+                    }
+                }
+
+                beatsTextPoint.setX(x);
+                beatsTextPoint.setY(y);
+
+                painter.setPen(QPen(QBrush(m_qColorBackground), 2.5 * m_scaleFactor));
+                painter.setFont(bgFont);
+                painter.drawText(beatsTextPoint, beatCount);
+
+                painter.setPen(draggedCaretColor);
+                painter.setFont(fgFont);
+                painter.drawText(beatsTextPoint, beatCount);
+
+                /* FIXME END */
             }
         }
     }

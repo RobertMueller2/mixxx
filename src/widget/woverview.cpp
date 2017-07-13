@@ -44,6 +44,7 @@ WOverview::WOverview(const char *pGroup, UserSettingsPointer pConfig, QWidget* p
         m_endOfTrack(false),
         m_bDrag(false),
         m_iPos(0),
+        m_iMousePosition(-1),
         m_orientation(Qt::Horizontal),
         m_a(1.0),
         m_b(0.0),
@@ -62,6 +63,7 @@ WOverview::WOverview(const char *pGroup, UserSettingsPointer pConfig, QWidget* p
 }
 
 void WOverview::setup(const QDomNode& node, const SkinContext& context) {
+    setMouseTracking(true);
     m_scaleFactor = context.getScaleFactor();
     m_signalColors.setup(node, context);
 
@@ -136,21 +138,21 @@ void WOverview::setup(const QDomNode& node, const SkinContext& context) {
             }
         }
     }
+
 }
 
 void WOverview::onConnectedControlChanged(double dParameter, double dValue) {
     Q_UNUSED(dValue);
-    if (!m_bDrag) {
-        // Calculate handle position. Clamp the value within 0-1 because that's
-        // all we represent with this widget.
-        dParameter = math_clamp(dParameter, 0.0, 1.0);
 
-        int iPos = valueToPosition(dParameter);
-        if (iPos != m_iPos) {
-            m_iPos = iPos;
-            //qDebug() << "WOverview::onConnectedControlChanged" << dParameter << ">>" << m_iPos;
-            update();
-        }
+    // Calculate handle position. Clamp the value within 0-1 because that's
+    // all we represent with this widget.
+    dParameter = math_clamp(dParameter, 0.0, 1.0);
+
+    int iPos = valueToPosition(dParameter);
+    if (iPos != m_iPos) {
+        m_iPos = iPos;
+        //qDebug() << "WOverview::onConnectedControlChanged" << dParameter << ">>" << m_iPos;
+        update();
     }
 }
 
@@ -255,18 +257,33 @@ void WOverview::onMarkRangeChange(double /*v*/) {
     update();
 }
 
+void WOverview::leaveEvent(QEvent* /*unused*/) {
+    m_iMousePosition = -1;
+    update();
+}
+
 void WOverview::mouseMoveEvent(QMouseEvent* e) {
-    if (m_orientation == Qt::Horizontal) {
-        m_iPos = math_clamp(e->x(), 0, width() - 1);
-    } else {
-        m_iPos = math_clamp(e->y(), 0, height() - 1);
+    if (m_bDrag || (e->x() > 0 && e->y() > 0 && e->x() < width() && e->y() < height() )) {
+        if (m_orientation == Qt::Horizontal) {
+            m_iMousePosition = math_clamp(e->x(), 0, width() - 1);
+        } else {
+            m_iMousePosition = math_clamp(e->y(), 0, height() - 1);
+        }
     }
-    //qDebug() << "WOverview::mouseMoveEvent" << e->pos() << m_iPos;
+    else {
+        m_iMousePosition = -1;
+    }
+
+    //qDebug() << "WOverview::mouseMoveEvent" << e->pos() << m_iMousePosition;
     update();
 }
 
 void WOverview::mouseReleaseEvent(QMouseEvent* e) {
     mouseMoveEvent(e);
+
+    //FIXME: does this need any plausibility testing?
+    m_iPos = m_iMousePosition;
+
     double dValue = positionToValue(m_iPos);
     //qDebug() << "WOverview::mouseReleaseEvent" << e->pos() << m_iPos << ">>" << dValue;
 
@@ -523,6 +540,16 @@ void WOverview::paintEvent(QPaintEvent * /*unused*/) {
             painter.drawLine(m_iPos - 2, breadth() - 1, m_iPos, breadth() - 3);
             painter.drawLine(m_iPos, breadth() - 3, m_iPos + 2, breadth() - 1);
             painter.drawLine(m_iPos - 2, breadth() - 1, m_iPos + 2, breadth() - 1);
+
+            // draw dragged caret
+            if (m_iMousePosition > -1) {
+
+                //FIXME: Color choice
+                QColor draggedCaretColor = m_bDrag ? QColor(255,255,0) : QColor(255,255,255);
+
+                paintCaret(m_iMousePosition, draggedCaretColor, &painter);
+
+            }
         }
     }
     painter.end();
@@ -552,6 +579,17 @@ void WOverview::paintText(const QString &text, QPainter *painter) {
     }
     painter->drawText(10 * m_scaleFactor, 12 * m_scaleFactor, text);
     painter->resetTransform();
+}
+
+void WOverview::paintCaret(int pos, const QColor &color, QPainter *painter) {
+    painter->setPen(QPen(QBrush(m_qColorBackground), 1 * m_scaleFactor));
+    painter->setOpacity(0.5);
+    painter->drawLine(pos + 1, 0, pos + 1, breadth());
+    painter->drawLine(pos - 1, 0, pos - 1, breadth());
+
+    painter->setPen(QPen(color, 1 * m_scaleFactor));
+    painter->setOpacity(1.0);
+    painter->drawLine(pos, 0, pos, breadth());
 }
 
 void WOverview::resizeEvent(QResizeEvent * /*unused*/) {

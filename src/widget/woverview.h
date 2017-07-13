@@ -46,6 +46,7 @@ class WOverview : public WWidget {
     void trackDropped(QString filename, QString group);
 
   protected:
+    void leaveEvent(QEvent* /*unused*/) override;
     void mouseMoveEvent(QMouseEvent *e) override;
     void mouseReleaseEvent(QMouseEvent *e) override;
     void mousePressEvent(QMouseEvent *e) override;
@@ -91,6 +92,7 @@ class WOverview : public WWidget {
   private:
     // Append the waveform overview pixmap according to available data in waveform
     virtual bool drawNextPixmapPart() = 0;
+    void paintCaret(int pos, const QColor &color, QPainter *painter);
     void paintText(const QString &text, QPainter *painter);
     inline int valueToPosition(double value) const {
         return static_cast<int>(m_a * value - m_b);
@@ -114,6 +116,9 @@ class WOverview : public WWidget {
     bool m_bDrag;
     // Internal storage of slider position in pixels
     int m_iPos;
+
+    // Mouse position
+    int m_iMousePosition;
 
     Qt::Orientation m_orientation;
 

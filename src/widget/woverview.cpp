@@ -281,13 +281,46 @@ void WOverview::mouseMoveEvent(QMouseEvent* e) {
 void WOverview::mouseReleaseEvent(QMouseEvent* e) {
     mouseMoveEvent(e);
 
-    //FIXME: does this need any plausibility testing?
-    m_iPos = m_iMousePosition;
+    if (QApplication::keyboardModifiers() & Qt::ControlModifier && m_pCurrentTrack) {
+        BeatsPointer beats =  m_pCurrentTrack->getBeats();
 
-    double dValue = positionToValue(m_iPos);
-    //qDebug() << "WOverview::mouseReleaseEvent" << e->pos() << m_iPos << ">>" << dValue;
+        //FIXME: This would be better suited with beats.h
+        if (beats) {
+            double samples = m_trackSamplesControl->get();
+            const float modifier = length()-2;
+            double s1,s2;
+            short sgn = 1;
+            s1 = beats->findClosestBeat(m_iPos * samples / modifier);
+            //FIXME: Does this need any offset?
+            s2 = m_iMousePosition * samples / modifier;
 
-    setControlParameterUp(dValue);
+            int beatCount;
+            if (s2 > s1) {
+                beatCount = beats->numBeatsInRange(s1, s2);
+            }
+            else {
+                beatCount = beats->numBeatsInRange(s2, s1);
+                sgn = -1;
+            }
+            //FIXME: consider non-4/4 tracks
+            //
+            int beatDiff = ((int)beatCount / 4) * 4 +1;
+            double targetValue = beats->findNthBeat(s1, sgn*beatDiff) / samples;
+
+            //FIXME: set m_iPos
+            setControlParameterUp(targetValue);
+            m_iPos = valueToPosition(targetValue);
+
+        }
+    } else {
+
+        //FIXME: does this need any plausibility testing?
+        m_iPos = m_iMousePosition;
+        double dValue = positionToValue(m_iPos);
+        //qDebug() << "WOverview::mouseReleaseEvent" << e->pos() << m_iPos << ">>" << dValue;
+
+        setControlParameterUp(dValue);
+    }
     m_bDrag = false;
 }
 
@@ -550,8 +583,8 @@ void WOverview::paintEvent(QPaintEvent * /*unused*/) {
                 beats =  m_pCurrentTrack->getBeats();
             }
 
-            if (beats) {
-                double samples = m_pCurrentTrack->getSampleRate() * m_pCurrentTrack->getDuration() * 2;
+            if (beats && m_iPos != m_iMousePosition) {
+                double samples = m_trackSamplesControl->get();
                 double s1,s2;
                 short sgn = 1;
                 if (m_iMousePosition > m_iPos) {
